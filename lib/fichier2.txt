@@ -1,0 +1,398 @@
+// ============================================
+// MODELS PRODUCTEUR
+// Fichier: lib/coeur/models/
+// ============================================
+
+// ============================================
+// 1. PARCELLE MODEL
+// Fichier: lib/coeur/models/parcelle.dart
+// ============================================
+
+import 'package:latlong2/latlong.dart';
+
+class Parcelle {
+  final String id;
+  final String producteurId;
+  final String nom;
+  final double surface; // en hectares
+  final String typeSol;
+  final LatLng coordonnees;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  Parcelle({
+    required this.id,
+    required this.producteurId,
+    required this.nom,
+    required this.surface,
+    required this.typeSol,
+    required this.coordonnees,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory Parcelle.fromJson(Map<String, dynamic> json) {
+    // Parser les coordonnées GeoJSON
+    final coords = json['coordonnees'];
+    LatLng latLng;
+    
+    if (coords is Map && coords['type'] == 'Point') {
+      final coordinates = coords['coordinates'] as List;
+      latLng = LatLng(coordinates[1], coordinates[0]); // [lon, lat] -> LatLng(lat, lon)
+    } else {
+      latLng = const LatLng(0, 0); // Valeur par défaut
+    }
+
+    return Parcelle(
+      id: json['id'],
+      producteurId: json['producteur_id'],
+      nom: json['nom'],
+      surface: (json['surface'] as num).toDouble(),
+      typeSol: json['type_sol'],
+      coordonnees: latLng,
+      createdAt: DateTime.parse(json['created_at']),
+      updatedAt: DateTime.parse(json['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'producteur_id': producteurId,
+      'nom': nom,
+      'surface': surface,
+      'type_sol': typeSol,
+      'coordonnees': {
+        'type': 'Point',
+        'coordinates': [coordonnees.longitude, coordonnees.latitude]
+      },
+    };
+  }
+}
+
+// ============================================
+// 2. PRODUIT MODEL
+// Fichier: lib/coeur/models/produit.dart
+// ============================================
+
+class Produit {
+  final String id;
+  final String nom;
+  final String categorie;
+  final int dureeVie; // en jours
+  final double prixStandard;
+  final DateTime createdAt;
+
+  Produit({
+    required this.id,
+    required this.nom,
+    required this.categorie,
+    required this.dureeVie,
+    required this.prixStandard,
+    required this.createdAt,
+  });
+
+  factory Produit.fromJson(Map<String, dynamic> json) {
+    return Produit(
+      id: json['id'],
+      nom: json['nom'],
+      categorie: json['categorie'],
+      dureeVie: json['duree_vie'],
+      prixStandard: (json['prix_standard'] as num).toDouble(),
+      createdAt: DateTime.parse(json['created_at']),
+    );
+  }
+}
+
+// ============================================
+// 3. STOCK MODEL
+// Fichier: lib/coeur/models/stock.dart
+// ============================================
+
+class Stock {
+  final String id;
+  final String producteurId;
+  final String produitId;
+  final String nom;
+  final double qteDisponible;
+  final int nbreLots;
+  final double seuilAlerte;
+  final DateTime dernierMiseAJour;
+  
+  // Données jointes (optionnelles)
+  Produit? produit;
+  List<Lot>? lots;
+
+  Stock({
+    required this.id,
+    required this.producteurId,
+    required this.produitId,
+    required this.nom,
+    required this.qteDisponible,
+    required this.nbreLots,
+    required this.seuilAlerte,
+    required this.dernierMiseAJour,
+    this.produit,
+    this.lots,
+  });
+
+  factory Stock.fromJson(Map<String, dynamic> json) {
+    return Stock(
+      id: json['id'],
+      producteurId: json['producteur_id'],
+      produitId: json['produit_id'],
+      nom: json['nom'],
+      qteDisponible: (json['qte_disponible'] as num).toDouble(),
+      nbreLots: json['nbre_lots'],
+      seuilAlerte: (json['seuil_alerte'] as num).toDouble(),
+      dernierMiseAJour: DateTime.parse(json['dernier_mise_a_jour']),
+      produit: json['produits'] != null ? Produit.fromJson(json['produits']) : null,
+      lots: json['lots'] != null 
+        ? (json['lots'] as List).map((e) => Lot.fromJson(e)).toList()
+        : null,
+    );
+  }
+
+  // Calcul du statut d'alerte
+  String get statutAlerte {
+    if (qteDisponible < seuilAlerte * 0.5) return 'Critique';
+    if (qteDisponible < seuilAlerte) return 'Bas';
+    return 'Normal';
+  }
+
+  // Pourcentage de remplissage par rapport au seuil
+  double get pourcentageRemplissage {
+    return (qteDisponible / seuilAlerte * 100).clamp(0, 100);
+  }
+}
+
+// ============================================
+// 4. LOT MODEL
+// Fichier: lib/coeur/models/lot.dart
+// ============================================
+
+enum StatutLot { frais, critique, perime }
+
+class Lot {
+  final String id;
+  final String codeQr;
+  final String stockId;
+  final String produitId;
+  final String parcelleId;
+  final String producteurId;
+  final DateTime dateRecolte;
+  final double qteInitiale;
+  final double qteRestante;
+  final StatutLot statut;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  // Données jointes (optionnelles)
+  Produit? produit;
+  Parcelle? parcelle;
+
+  Lot({
+    required this.id,
+    required this.codeQr,
+    required this.stockId,
+    required this.produitId,
+    required this.parcelleId,
+    required this.producteurId,
+    required this.dateRecolte,
+    required this.qteInitiale,
+    required this.qteRestante,
+    required this.statut,
+    required this.createdAt,
+    required this.updatedAt,
+    this.produit,
+    this.parcelle,
+  });
+
+  factory Lot.fromJson(Map<String, dynamic> json) {
+    return Lot(
+      id: json['id'],
+      codeQr: json['code_qr'],
+      stockId: json['stock_id'],
+      produitId: json['produit_id'],
+      parcelleId: json['parcelle_id'],
+      producteurId: json['producteur_id'],
+      dateRecolte: DateTime.parse(json['date_recolte']),
+      qteInitiale: (json['qte_initiale'] as num).toDouble(),
+      qteRestante: (json['qte_restante'] as num).toDouble(),
+      statut: _parseStatut(json['statut']),
+      createdAt: DateTime.parse(json['created_at']),
+      updatedAt: DateTime.parse(json['updated_at']),
+      produit: json['produits'] != null ? Produit.fromJson(json['produits']) : null,
+      parcelle: json['parcelles'] != null ? Parcelle.fromJson(json['parcelles']) : null,
+    );
+  }
+
+  static StatutLot _parseStatut(String statut) {
+    switch (statut) {
+      case 'Frais': return StatutLot.frais;
+      case 'Critique': return StatutLot.critique;
+      case 'Perime': return StatutLot.perime;
+      default: return StatutLot.frais;
+    }
+  }
+
+  String get statutString {
+    switch (statut) {
+      case StatutLot.frais: return 'Frais';
+      case StatutLot.critique: return 'Critique';
+      case StatutLot.perime: return 'Périmé';
+    }
+  }
+
+  // Calcul des jours restants (si produit chargé)
+  int? get joursRestants {
+    if (produit == null) return null;
+    final joursPasses = DateTime.now().difference(dateRecolte).inDays;
+    return produit!.dureeVie - joursPasses;
+  }
+
+  // Calcul du pourcentage de fraîcheur
+  double? get pourcentageFraicheur {
+    if (produit == null) return null;
+    final jours = joursRestants;
+    if (jours == null) return 0;
+    return (jours / produit!.dureeVie * 100).clamp(0, 100);
+  }
+
+  // Code couleur
+  String get codeCouleur {
+    final jours = joursRestants;
+    if (jours == null) return 'gris';
+    if (jours > 5) return 'vert';
+    if (jours >= 3) return 'orange';
+    return 'rouge';
+  }
+
+  bool get estVendu => qteRestante == 0;
+}
+
+// ============================================
+// 5. ACTIVITE MODEL
+// Fichier: lib/coeur/models/activite.dart
+// ============================================
+
+enum NatureActivite { semis, irrigation, traitement, recolte, autre }
+
+class Activite {
+  final String id;
+  final String parcelleId;
+  final DateTime dateAction;
+  final String description;
+  final NatureActivite nature;
+  final Map<String, dynamic>? intrantUtilise;
+  final DateTime createdAt;
+
+  Activite({
+    required this.id,
+    required this.parcelleId,
+    required this.dateAction,
+    required this.description,
+    required this.nature,
+    this.intrantUtilise,
+    required this.createdAt,
+  });
+
+  factory Activite.fromJson(Map<String, dynamic> json) {
+    return Activite(
+      id: json['id'],
+      parcelleId: json['parcelle_id'],
+      dateAction: DateTime.parse(json['date_action']),
+      description: json['description'],
+      nature: _parseNature(json['nature']),
+      intrantUtilise: json['intrant_utilise'],
+      createdAt: DateTime.parse(json['created_at']),
+    );
+  }
+
+  static NatureActivite _parseNature(String nature) {
+    switch (nature) {
+      case 'Semis': return NatureActivite.semis;
+      case 'Irrigation': return NatureActivite.irrigation;
+      case 'Traitement': return NatureActivite.traitement;
+      case 'Recolte': return NatureActivite.recolte;
+      default: return NatureActivite.autre;
+    }
+  }
+
+  String get natureString {
+    switch (nature) {
+      case NatureActivite.semis: return 'Semis';
+      case NatureActivite.irrigation: return 'Irrigation';
+      case NatureActivite.traitement: return 'Traitement';
+      case NatureActivite.recolte: return 'Récolte';
+      case NatureActivite.autre: return 'Autre';
+    }
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'parcelle_id': parcelleId,
+      'date_action': dateAction.toIso8601String().split('T')[0],
+      'description': description,
+      'nature': natureString,
+      'intrant_utilise': intrantUtilise,
+    };
+  }
+}
+
+// ============================================
+// 6. PREVISION MODEL
+// Fichier: lib/coeur/models/prevision.dart
+// ============================================
+
+class Prevision {
+  final String id;
+  final String produitId;
+  final DateTime horizonTemporel;
+  final double qteEstimee;
+  final double indiceConfiance;
+  final String source; // IA ou Admin
+  final String? justification;
+  final bool estActive;
+  
+  // Données jointes
+  Produit? produit;
+
+  Prevision({
+    required this.id,
+    required this.produitId,
+    required this.horizonTemporel,
+    required this.qteEstimee,
+    required this.indiceConfiance,
+    required this.source,
+    this.justification,
+    required this.estActive,
+    this.produit,
+  });
+
+  factory Prevision.fromJson(Map<String, dynamic> json) {
+    return Prevision(
+      id: json['id'],
+      produitId: json['produit_id'],
+      horizonTemporel: DateTime.parse(json['horizon_temporel']),
+      qteEstimee: (json['qte_estimee'] as num).toDouble(),
+      indiceConfiance: (json['indice_confiance'] as num).toDouble(),
+      source: json['source'],
+      justification: json['justification'],
+      estActive: json['est_active'] ?? true,
+      produit: json['produits'] != null ? Produit.fromJson(json['produits']) : null,
+    );
+  }
+
+  // Niveau de confiance en texte
+  String get niveauConfiance {
+    if (indiceConfiance >= 0.8) return 'Élevé';
+    if (indiceConfiance >= 0.5) return 'Moyen';
+    return 'Faible';
+  }
+
+  // Jours restants jusqu'à l'horizon
+  int get joursRestants {
+    return horizonTemporel.difference(DateTime.now()).inDays;
+  }
+}
